@@ -242,9 +242,17 @@
             50% { opacity: 1; }
         }
         .gold-shimmer { animation: shimmer 3s ease-in-out infinite; }
+
+        /* Floating emoji bubbles */
+        #bubble-canvas { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+        #bubble-canvas .bubble { position: absolute; font-size: 32px; opacity: 0.25; user-select: none; will-change: transform; }
+        @media (min-width: 1024px) { #bubble-canvas .bubble { font-size: 48px; } }
     </style>
 </head>
 <body class="bg-deep-shadow text-clinical-white font-sans antialiased overflow-x-hidden selection:bg-electric-teal selection:text-deep-shadow">
+
+    <!-- Floating Emoji Bubbles HTML -->
+    <div id="bubble-canvas" aria-hidden="true"></div>
 
     <!-- ═══════════════════════════════════════════ -->
     <!-- NAVBAR -->
@@ -969,6 +977,52 @@
                 mobileMenu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => mobileMenu.classList.add('hidden')));
             }
 
+            // 9. Floating Emoji Bubbles Physics
+            const bubbleCanvas = document.getElementById('bubble-canvas');
+            if (bubbleCanvas) {
+                const emojis = ['🩺','🦷','💉','🔬','💊','🧪','🏥','🧬','🩹','🩺','🎬','🎥','🎞️','🎭','🎤','📽️','🎧','🎦','🎙️','✂️','🔭','🍿','🎫','🏆','🎞'];
+                const count = window.innerWidth < 768 ? 10 : 40;
+                const r = window.innerWidth < 768 ? 20 : 30;
+                const bubbles = [];
+                for (let i = 0; i < count; i++) {
+                    const el = document.createElement('span');
+                    el.className = 'bubble';
+                    el.textContent = emojis[i % emojis.length];
+                    bubbleCanvas.appendChild(el);
+                    const spd = 0.25 + Math.random() * 0.45;
+                    const ang = Math.random() * Math.PI * 2;
+                    bubbles.push({ el, x: r + Math.random() * (window.innerWidth - r * 2), y: r + Math.random() * (window.innerHeight - r * 2), vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r });
+                }
+                function animate() {
+                    const W = window.innerWidth, H = window.innerHeight;
+                    for (let i = 0; i < bubbles.length; i++) {
+                        const b = bubbles[i];
+                        b.x += b.vx; b.y += b.vy;
+                        if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); }
+                        if (b.x + b.r > W) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
+                        if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
+                        if (b.y + b.r > H) { b.y = H - b.r; b.vy = -Math.abs(b.vy); }
+                        for (let j = i + 1; j < bubbles.length; j++) {
+                            const o = bubbles[j];
+                            const dx = o.x - b.x, dy = o.y - b.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const minD = b.r + o.r;
+                            if (dist < minD && dist > 0) {
+                                const nx = dx / dist, ny = dy / dist, overlap = (minD - dist) / 2;
+                                b.x -= nx * overlap; b.y -= ny * overlap;
+                                o.x += nx * overlap; o.y += ny * overlap;
+                                const dvx = b.vx - o.vx, dvy = b.vy - o.vy, dot = dvx * nx + dvy * ny;
+                                b.vx -= dot * nx; b.vy -= dot * ny;
+                                o.vx += dot * nx; o.vy += dot * ny;
+                            }
+                        }
+                        b.el.style.transform = `translate(${b.x - b.r}px, ${b.y - b.r}px)`;
+                    }
+                    requestAnimationFrame(animate);
+                }
+                animate();
+            }
+
         });
 
         // ═══════════════════════════════════════════
@@ -1002,7 +1056,6 @@
                 }
             ];
 
-            // Build the theme switcher UI
             const fab = document.createElement('div');
             fab.className = 'theme-fab';
             fab.innerHTML = `
@@ -1026,12 +1079,10 @@
             const panel = document.getElementById('theme-panel');
             const grid = document.getElementById('theme-grid');
 
-            // Helper: RGB string to hex for preview bands
             function rgbStrToHex(rgbStr) {
                 return '#' + rgbStr.split(' ').map(v => parseInt(v).toString(16).padStart(2, '0')).join('');
             }
 
-            // Build palette cards
             themes.forEach((theme, i) => {
                 const card = document.createElement('div');
                 card.className = 'theme-card' + (i === 0 ? ' active' : '');
@@ -1050,7 +1101,6 @@
                 grid.appendChild(card);
             });
 
-            // Toggle panel
             toggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 panel.classList.toggle('open');
@@ -1059,7 +1109,6 @@
                 if (!fab.contains(e.target)) panel.classList.remove('open');
             });
 
-            // Apply theme
             function applyTheme(index) {
                 const theme = themes[index];
                 const root = document.documentElement.style;
@@ -1068,21 +1117,17 @@
                 root.setProperty('--et', theme.et);
                 root.setProperty('--og', theme.og);
                 root.setProperty('--cw', theme.cw);
-                // Update computed vars for section dividers
                 root.setProperty('--deep-shadow', `rgb(${theme.ds})`);
                 root.setProperty('--surgical-slate', `rgb(${theme.ss})`);
                 root.setProperty('--electric-teal', `rgb(${theme.et})`);
                 root.setProperty('--oscar-gold', `rgb(${theme.og})`);
                 root.setProperty('--clinical-white', `rgb(${theme.cw})`);
-                // Update active card
                 document.querySelectorAll('.theme-card').forEach((c, ci) => {
                     c.classList.toggle('active', ci === index);
                 });
-                // Save preference
                 try { localStorage.setItem('portfolio-theme', index); } catch(e) {}
             }
 
-            // Restore saved theme
             try {
                 const saved = localStorage.getItem('portfolio-theme');
                 if (saved !== null && themes[parseInt(saved)]) {
